@@ -1,0 +1,31 @@
+﻿<div class="inputContainer">
+    <input is="emby-input" type="text" class="txtFriendlyName" required="required" label="${LabelName}" />
+    <div class="fieldDescription">${FriendlyNameForReferenceHelp}</div>
+</div>
+
+<p>To use Slack register a new incoming webhook at https://&lt;your slack site&gt;/apps/manage/custom-integrations</p>
+
+<div class="inputContainer">
+    <input is="emby-input" type="text" class="txtSlackWebHookUri" required="required" label="Slack Incoming Webhook URI:" />
+    <div class="fieldDescription">
+        Path to Slack Webhook
+    </div>
+</div>
+<div class="inputContainer">
+    <input is="emby-input" type="text" class="txtSlackChannel" required="required" label="Message Channel:" />
+    <div class="fieldDescription">
+        Post message to channel (must already exist)
+    </div>
+</div>
+<div class="inputContainer">
+    <input is="emby-input" type="text" class="txtSlackEmoji" required="required" label="Emoji:" />
+    <div class="fieldDescription">
+        Emoji image to use for post (e.g. :ghost:)
+    </div>
+</div>
+<div class="inputContainer">
+    <input is="emby-input" type="text" class="txtSlackUserName" required="required" label="Slack Username:" />
+    <div class="fieldDescription">
+        Post will display as from this user (e.g. Emby)
+    </div>
+</div>
