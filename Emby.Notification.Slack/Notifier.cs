@@ -94,7 +94,7 @@ namespace Emby.Notification.Slack
                                     new
                                     {
                                         type = "plain_text",
-                                        text = $"{slackMessage.icon_emoji}: {slackMessage.text}",
+                                        text = $"{slackMessage.icon_emoji} {slackMessage.text}",
                                         emoji = true
                                     }
                                 }
@@ -113,7 +113,7 @@ namespace Emby.Notification.Slack
                                     new
                                     {
                                         type = "plain_text",
-                                        text = $"{slackMessage.icon_emoji}: {slackMessage.text}",
+                                        text = $"{slackMessage.icon_emoji} {slackMessage.text}",
                                         emoji = true
                                     }
                                 }
