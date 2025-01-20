@@ -1,16 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Notifications;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Serialization;
 using Emby.Notifications;
 using MediaBrowser.Controller;
+using MediaBrowser.Model.IO;
 
 namespace Emby.Notification.Slack
 {
@@ -20,13 +18,15 @@ namespace Emby.Notification.Slack
         private IServerApplicationHost _appHost;
         private IHttpClient _httpClient;
         private IJsonSerializer _jsonSerializer;
+        private IFileSystem _fileSystem;
 
-        public Notifier(ILogger logger, IServerApplicationHost applicationHost, IHttpClient httpClient, IJsonSerializer jsonSerializer)
+        public Notifier(ILogger logger, IServerApplicationHost applicationHost, IHttpClient httpClient, IJsonSerializer jsonSerializer, IFileSystem fileSystem)
         {
             _logger = logger;
             _appHost = applicationHost;
             _httpClient = httpClient;
             _jsonSerializer = jsonSerializer;
+            _fileSystem = fileSystem;
         }
 
         private Plugin Plugin => _appHost.Plugins.OfType<Plugin>().First();
@@ -45,7 +45,7 @@ namespace Emby.Notification.Slack
             options.TryGetValue("Emoji", out string emoji);
             options.TryGetValue("UserName", out string userName);
             options.TryGetValue("SlackWebHookURI", out string slackWebHookURI);
-            
+
             var slackMessage = new SlackMessage { channel = channel, icon_emoji = emoji, username = userName };
 
             if (string.IsNullOrEmpty(request.Description))
@@ -59,9 +59,74 @@ namespace Emby.Notification.Slack
 
             slackMessage.text = slackMessage.text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
 
+            // get a series or album image if available, otherwise, the image from the media
+            var image = request.GetSeriesImageInfo(MediaBrowser.Model.Entities.ImageType.Primary)
+                ?? request.GetSeriesImageInfo(MediaBrowser.Model.Entities.ImageType.Thumb)
+                ?? request.GetImageInfo(MediaBrowser.Model.Entities.ImageType.Primary);
+
+            string imageUrl = null;
+
+            if (image != null)
+            {
+                imageUrl = image.GetRemoteApiImageUrl(new ApiImageOptions
+                {
+                    Format = "jpg"
+
+                });
+            }
+
+            var finalMessage = new object {};
+
+            if (!string.IsNullOrEmpty(imageUrl)) {
+                finalMessage = new {
+                        channel = slackMessage.channel,
+                        blocks = new [] {
+                            new {
+                                type = "context",
+                                elements = new object[]
+                                {
+                                    new
+                                    {
+                                        type = "image",
+                                        image_url = imageUrl,
+                                        alt_text = "test"
+                                    },
+                                    new
+                                    {
+                                        type = "plain_text",
+                                        text = $"{slackMessage.icon_emoji}: {slackMessage.text}",
+                                        emoji = true
+                                    }
+                                }
+                            }
+                        }
+                    };
+            } else {
+                finalMessage = new {
+                        channel = slackMessage.channel,
+                        blocks = new [] {
+                            new {
+                                type = "context",
+                                emoji = slackMessage.icon_emoji,
+                                elements = new object[]
+                                {
+                                    new
+                                    {
+                                        type = "plain_text",
+                                        text = $"{slackMessage.icon_emoji}: {slackMessage.text}",
+                                        emoji = true
+                                    }
+                                }
+                            }
+                        }
+                    };
+            }
+
+
+            _logger.Debug(_jsonSerializer.SerializeToString(finalMessage));
 
             var parameters = new Dictionary<string, string> { };
-            parameters.Add("payload", System.Net.WebUtility.UrlEncode(_jsonSerializer.SerializeToString(slackMessage)));
+            parameters.Add("payload", System.Net.WebUtility.UrlEncode(_jsonSerializer.SerializeToString(finalMessage)));
 
             var _httpRequest = new HttpRequestOptions
             {
