@@ -9,11 +9,19 @@ using MediaBrowser.Model.Serialization;
 using Emby.Notifications;
 using MediaBrowser.Controller;
 using MediaBrowser.Model.IO;
+using System;
+using System.IO;
+using System.Net.Http;
+using Emby.Media.Common.Extensions;
+using System.Net.Http.Headers;
+using System.Data.Common;
 
 namespace Emby.Notification.Slack
 {
     public class Notifier : IUserNotifier
     {
+        private const string SLACK_UPLOAD_URL = "https://slack.com/api/files.getUploadURLExternal";
+        private const string SLACK_UPLOAD_FINALIZE_URL = "https://slack.com/api/files.completeUploadExternal";
         private ILogger _logger;
         private IServerApplicationHost _appHost;
         private IHttpClient _httpClient;
@@ -48,6 +56,8 @@ namespace Emby.Notification.Slack
 
             var slackMessage = new SlackMessage { channel = channel, icon_emoji = emoji, username = userName };
 
+            string testtoken = "FAKE_TOKEN";
+
             if (string.IsNullOrEmpty(request.Description))
             {
                 slackMessage.text = request.Title;
@@ -68,11 +78,46 @@ namespace Emby.Notification.Slack
 
             if (image != null)
             {
-                imageUrl = image.GetRemoteApiImageUrl(new ApiImageOptions
-                {
-                    Format = "jpg"
+                string imagePath = image.ImageInfo.Path;
+                FileAttributes imageAtributes = System.IO.File.GetAttributes(imagePath);
+                FileInfo imageInfo = new FileInfo(imagePath);
+                HttpRequestOptions fileUploadOptions = new HttpRequestOptions();
+                fileUploadOptions.Url = SLACK_UPLOAD_URL;
+                fileUploadOptions.SetPostData(new Dictionary<String,String>() {{"token", testtoken},{"filename", imagePath},{"length", imageInfo.Length.ToString()}});
+                HttpResponseInfo response = await _httpClient.Post(fileUploadOptions);
+                if (response.StatusCode.Equals(System.Net.HttpStatusCode.OK)) {
+                    var uploadResult = _jsonSerializer.DeserializeFromStream<FileResponse>(response.Content);
 
-                });
+                    if (uploadResult.ok.Equals(true)) {
+                        _logger.Debug("uploading notification image to slack");
+
+                        var filePath = imagePath;
+
+                        HttpClient multipartHttpClient = new HttpClient();
+                        using (var multipartFormContent = new MultipartFormDataContent())
+                        {
+                            var fileStreamContent = new StreamContent(System.IO.File.OpenRead(filePath));
+                            multipartFormContent.Add(fileStreamContent, name: "filename", fileName: filePath);
+                            var uploadResponse = await multipartHttpClient.PostAsync(uploadResult.upload_url, multipartFormContent);
+                            uploadResponse.EnsureSuccessStatusCode();
+                            await uploadResponse.Content.ReadAsStringAsync();
+                        }
+
+
+                        HttpRequestOptions finalizeUploadOptions = new HttpRequestOptions();
+                        finalizeUploadOptions.Url = SLACK_UPLOAD_FINALIZE_URL;
+                        finalizeUploadOptions.RequestHeaders.Add("token", testtoken);
+                        var finalizePayload = new [] {new {id = uploadResult.file_id}};
+                        finalizeUploadOptions.SetPostData(new Dictionary<String,String>() {{"token", testtoken},{"channel_id", "C08517Z3Y9Y"},{"files", System.Net.WebUtility.UrlEncode(_jsonSerializer.SerializeToString(finalizePayload))}});
+                        HttpResponseInfo finalizeResponse = await _httpClient.Post(finalizeUploadOptions);
+                        var finalUploadResult = _jsonSerializer.DeserializeFromStream<FinalizedFileResponse>(finalizeResponse.Content);
+
+                        if (finalUploadResult.ok.Equals(true) && finalUploadResult.files.First().permalink_public != null) {
+                            imageUrl = finalUploadResult.files.First().permalink_public;
+                            _logger.Debug("slack image url: "+imageUrl);
+                        }
+                    }
+                }
             }
 
             var finalMessage = new object {};
@@ -107,7 +152,6 @@ namespace Emby.Notification.Slack
                         blocks = new [] {
                             new {
                                 type = "context",
-                                emoji = slackMessage.icon_emoji,
                                 elements = new object[]
                                 {
                                     new
