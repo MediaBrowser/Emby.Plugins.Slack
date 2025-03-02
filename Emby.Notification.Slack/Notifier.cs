@@ -141,7 +141,7 @@ namespace Emby.Notification.Slack
                         _logger.Debug("Slack image upload aborted due to failure to retrieve channel ID (Didn't find channel name in list)");
                     }
                 } else {
-                    _logger.Debug("Slack image upload aborted due to failure to retrieve channel ID (Couldn't get channel list)");
+                    _logger.Debug("Slack image upload aborted due to failure to retrieve channel ID (Couldn't get channel list): "+channelsListResponse.error);
                 }
             } else {
                 _logger.Debug("Slack image upload not attempted due to unconfigured Slack API token or missing item image");

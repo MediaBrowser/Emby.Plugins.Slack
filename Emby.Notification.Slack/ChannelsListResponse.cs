@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 
 namespace Emby.Notification.Slack {
+
     public class Canvas
         {
             public string file_id { get; set; }
@@ -66,6 +67,7 @@ namespace Emby.Notification.Slack {
             public string ok { get; set; }
             public List<Channel> channels { get; set; }
             public ResponseMetadata response_metadata { get; set; }
+            public string error { get; set; }
         }
 
         public class Tab
