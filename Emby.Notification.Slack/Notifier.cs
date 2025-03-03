@@ -81,77 +81,85 @@ namespace Emby.Notification.Slack
                 HttpRequestOptions channelsListRequestOptions = new HttpRequestOptions();
                 channelsListRequestOptions.Url = SLACK_CHANNELS_URL;
                 channelsListRequestOptions.SetPostData(new Dictionary<String, String>() { { "token", SlackApiToken } });
-                HttpResponseInfo channelsListResult = await _httpClient.Post(channelsListRequestOptions);
-                var channelsListResponse = _jsonSerializer.DeserializeFromStream<ChannelsListResponse>(channelsListResult.Content);
-                if (channelsListResponse.ok.Equals("true"))
+                using (var channelsListResult = await _httpClient.Post(channelsListRequestOptions).ConfigureAwait(false))
                 {
-                    string channelId = null;
-                    foreach (Channel c in channelsListResponse.channels)
+                    var channelsListResponse = _jsonSerializer.DeserializeFromStream<ChannelsListResponse>(channelsListResult.Content);
+                    if (channelsListResponse.ok.Equals("true"))
                     {
-                        if (c.name.Equals(channel))
+                        string channelId = null;
+                        foreach (Channel c in channelsListResponse.channels)
                         {
-                            _logger.Debug("found channel id " + c.id + " for channel: " + channel);
-                            channelId = c.id;
-                            break;
-                        }
-
-                    }
-                    if (channelId != null)
-                    {
-                        _logger.Debug("uploading item image to slack");
-                        string imagePath = image.ImageInfo.Path;
-                        var imageInfo = _fileSystem.GetFileInfo(imagePath);
-                        HttpRequestOptions fileUploadOptions = new HttpRequestOptions();
-                        fileUploadOptions.Url = SLACK_UPLOAD_URL;
-                        fileUploadOptions.SetPostData(new Dictionary<String, String>() { { "token", SlackApiToken }, { "filename", imagePath }, { "length", imageInfo.Length.ToString() } });
-                        HttpResponseInfo response = await _httpClient.Post(fileUploadOptions);
-                        _logger.Debug("slack image upload response was: " + response.StatusCode + " " + System.Net.HttpStatusCode.OK);
-                        if (response.StatusCode.Equals(System.Net.HttpStatusCode.OK))
-                        {
-                            var uploadResult = _jsonSerializer.DeserializeFromStream<FileResponse>(response.Content);
-                            _logger.Debug("slack image upload result: ");
-                            _logger.Debug(uploadResult.ToString());
-                            if (uploadResult.ok.Equals("true"))
+                            if (c.name.Equals(channel))
                             {
-                                _logger.Debug("uploading notification image to slack");
+                                _logger.Debug("found channel id " + c.id + " for channel: " + channel);
+                                channelId = c.id;
+                                break;
+                            }
 
-                                var filePath = imagePath;
+                        }
+                        if (channelId != null)
+                        {
+                            _logger.Debug("uploading item image to slack");
+                            string imagePath = image.ImageInfo.Path;
+                            var imageInfo = _fileSystem.GetFileInfo(imagePath);
+                            HttpRequestOptions fileUploadOptions = new HttpRequestOptions();
+                            fileUploadOptions.Url = SLACK_UPLOAD_URL;
+                            fileUploadOptions.SetPostData(new Dictionary<String, String>() { { "token", SlackApiToken }, { "filename", imagePath }, { "length", imageInfo.Length.ToString() } });
 
-                                HttpClient multipartHttpClient = new HttpClient();
-                                using (var multipartFormContent = new MultipartFormDataContent())
+                            using (var response = await _httpClient.Post(fileUploadOptions).ConfigureAwait(false))
+                            {
+                                _logger.Debug("slack image upload response was: " + response.StatusCode + " " + System.Net.HttpStatusCode.OK);
+                                if (response.StatusCode.Equals(System.Net.HttpStatusCode.OK))
                                 {
-                                    var fileStreamContent = new StreamContent(System.IO.File.OpenRead(filePath));
-                                    //Add the file
-                                    multipartFormContent.Add(fileStreamContent, name: "filename", fileName: filePath);
-                                    //Send it
-                                    var uploadResponse = await multipartHttpClient.PostAsync(uploadResult.upload_url, multipartFormContent);
-                                    uploadResponse.EnsureSuccessStatusCode();
-                                    await uploadResponse.Content.ReadAsStringAsync();
-                                }
+                                    var uploadResult = _jsonSerializer.DeserializeFromStream<FileResponse>(response.Content);
+                                    _logger.Debug("slack image upload result: ");
+                                    _logger.Debug(uploadResult.ToString());
+                                    if (uploadResult.ok.Equals("true"))
+                                    {
+                                        _logger.Debug("uploading notification image to slack");
 
-                                HttpRequestOptions finalizeUploadOptions = new HttpRequestOptions();
-                                finalizeUploadOptions.Url = SLACK_UPLOAD_FINALIZE_URL;
-                                finalizeUploadOptions.RequestHeaders.Add("token", SlackApiToken);
-                                var finalizePayload = new[] { new { id = uploadResult.file_id } };
-                                finalizeUploadOptions.SetPostData(new Dictionary<String, String>() { { "token", SlackApiToken }, { "channel_id", channelId }, { "files", System.Net.WebUtility.UrlEncode(_jsonSerializer.SerializeToString(finalizePayload)) } });
-                                HttpResponseInfo finalizeResponse = await _httpClient.Post(finalizeUploadOptions);
-                                var finalUploadResult = _jsonSerializer.DeserializeFromStream<FinalizedFileResponse>(finalizeResponse.Content);
+                                        var filePath = imagePath;
 
-                                if (finalUploadResult.ok.Equals(true) && finalUploadResult.files.First().permalink_public != null)
-                                {
-                                    imageUrl = finalUploadResult.files.First().permalink_public;
+                                        HttpClient multipartHttpClient = new HttpClient();
+                                        using (var multipartFormContent = new MultipartFormDataContent())
+                                        {
+                                            var fileStreamContent = new StreamContent(System.IO.File.OpenRead(filePath));
+                                            //Add the file
+                                            multipartFormContent.Add(fileStreamContent, name: "filename", fileName: filePath);
+                                            //Send it
+                                            var uploadResponse = await multipartHttpClient.PostAsync(uploadResult.upload_url, multipartFormContent).ConfigureAwait(false);
+                                            uploadResponse.EnsureSuccessStatusCode();
+                                            await uploadResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                        }
+
+                                        HttpRequestOptions finalizeUploadOptions = new HttpRequestOptions();
+                                        finalizeUploadOptions.Url = SLACK_UPLOAD_FINALIZE_URL;
+                                        finalizeUploadOptions.RequestHeaders.Add("token", SlackApiToken);
+                                        var finalizePayload = new[] { new { id = uploadResult.file_id } };
+                                        finalizeUploadOptions.SetPostData(new Dictionary<String, String>() { { "token", SlackApiToken }, { "channel_id", channelId }, { "files", System.Net.WebUtility.UrlEncode(_jsonSerializer.SerializeToString(finalizePayload)) } });
+
+                                        using (var finalizeResponse = await _httpClient.Post(finalizeUploadOptions).ConfigureAwait(false))
+                                        {
+                                            var finalUploadResult = _jsonSerializer.DeserializeFromStream<FinalizedFileResponse>(finalizeResponse.Content);
+
+                                            if (finalUploadResult.ok.Equals(true) && finalUploadResult.files.First().permalink_public != null)
+                                            {
+                                                imageUrl = finalUploadResult.files.First().permalink_public;
+                                            }
+                                        }
+                                    }
                                 }
                             }
+                        }
+                        else
+                        {
+                            _logger.Debug("Slack image upload aborted due to failure to retrieve channel ID (Didn't find channel name in list)");
                         }
                     }
                     else
                     {
-                        _logger.Debug("Slack image upload aborted due to failure to retrieve channel ID (Didn't find channel name in list)");
+                        _logger.Debug("Slack image upload aborted due to failure to retrieve channel ID (Couldn't get channel list): " + channelsListResponse.error);
                     }
-                }
-                else
-                {
-                    _logger.Debug("Slack image upload aborted due to failure to retrieve channel ID (Couldn't get channel list): " + channelsListResponse.error);
                 }
             }
             else
