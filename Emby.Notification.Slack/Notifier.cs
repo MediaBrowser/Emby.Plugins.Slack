@@ -96,8 +96,7 @@ namespace Emby.Notification.Slack
                     if (channelId != null) {
                         _logger.Debug("uploading item image to slack");
                         string imagePath = image.ImageInfo.Path;
-                        FileAttributes imageAtributes = System.IO.File.GetAttributes(imagePath);
-                        FileInfo imageInfo = new FileInfo(imagePath);
+                        var imageInfo = _fileSystem.GetFileInfo(imagePath);
                         HttpRequestOptions fileUploadOptions = new HttpRequestOptions();
                         fileUploadOptions.Url = SLACK_UPLOAD_URL;
                         fileUploadOptions.SetPostData(new Dictionary<String,String>() {{"token", SlackApiToken},{"filename", imagePath},{"length", imageInfo.Length.ToString()}});
