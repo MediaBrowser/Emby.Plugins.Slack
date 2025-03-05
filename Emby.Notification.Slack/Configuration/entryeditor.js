@@ -8,7 +8,7 @@
 
         entry.FriendlyName = context.querySelector('.txtFriendlyName').value;
         entry.Options.SlackWebHookURI = context.querySelector('.txtSlackWebHookUri').value;
-        entry.Options.SlackApiToken = context.querySelector('.txtSlackApiToken').value;
+        entry.Options.EnableImages = context.querySelector('.chkImages').checked;
         entry.Options.Channel = context.querySelector('.txtSlackChannel').value;
         entry.Options.Emoji = context.querySelector('.txtSlackEmoji').value;
         entry.Options.UserName = context.querySelector('.txtSlackUserName').value;
@@ -18,7 +18,7 @@
 
         context.querySelector('.txtFriendlyName').value = entry.FriendlyName || '';
         context.querySelector('.txtSlackWebHookUri').value = entry.Options.SlackWebHookURI || '';
-        context.querySelector('.txtSlackApiToken').value = entry.Options.SlackApiToken || '';
+        context.querySelector('.chkImages').checked = entry.Options.EnableImages === 'true';
         context.querySelector('.txtSlackChannel').value = entry.Options.Channel || '';
         context.querySelector('.txtSlackEmoji').value = entry.Options.Emoji || '';
         context.querySelector('.txtSlackUserName').value = entry.Options.UserName || '';

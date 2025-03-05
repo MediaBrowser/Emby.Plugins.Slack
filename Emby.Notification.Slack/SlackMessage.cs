@@ -30,17 +30,5 @@ namespace Emby.Notification.Slack
         /// <summary>
         /// Optional url for icon displayed with the message
         /// </summary>
-
-        public SlackMessage Clone(string newChannel = null)
-        {
-            return new SlackMessage()
-            {
-
-                text = text,
-                icon_emoji = icon_emoji,
-                username = username,
-                channel = newChannel ?? channel
-            };
-        }
     }
 }

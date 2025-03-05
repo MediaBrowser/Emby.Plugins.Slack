@@ -54,7 +54,7 @@ namespace Emby.Notification.Slack
             options.TryGetValue("Emoji", out string emoji);
             options.TryGetValue("UserName", out string userName);
             options.TryGetValue("SlackWebHookURI", out string slackWebHookURI);
-            options.TryGetValue("SlackApiToken", out string SlackApiToken);
+            options.TryGetValue("EnableImages", out string EnableImages);
 
             var slackMessage = new SlackMessage { channel = channel, icon_emoji = emoji, username = userName };
 
@@ -69,114 +69,37 @@ namespace Emby.Notification.Slack
 
             slackMessage.text = slackMessage.text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
 
-            // get a series or album image if available, otherwise, the image from the media
-            var image = request.GetSeriesImageInfo(MediaBrowser.Model.Entities.ImageType.Primary)
-                ?? request.GetSeriesImageInfo(MediaBrowser.Model.Entities.ImageType.Thumb)
-                ?? request.GetImageInfo(MediaBrowser.Model.Entities.ImageType.Primary);
-
             string imageUrl = null;
 
-            if (image != null && SlackApiToken.IsNotEmpty())
+            if (string.Equals(EnableImages, "true", StringComparison.OrdinalIgnoreCase))
             {
-                HttpRequestOptions channelsListRequestOptions = new HttpRequestOptions();
-                channelsListRequestOptions.Url = SLACK_CHANNELS_URL;
-                channelsListRequestOptions.SetPostData(new Dictionary<String, String>() { { "token", SlackApiToken } });
-                using (var channelsListResult = await _httpClient.Post(channelsListRequestOptions).ConfigureAwait(false))
+                // get a series or album image if available, otherwise, the image from the media
+                var image = request.GetSeriesImageInfo(MediaBrowser.Model.Entities.ImageType.Primary)
+                    ?? request.GetSeriesImageInfo(MediaBrowser.Model.Entities.ImageType.Thumb)
+                    ?? request.GetImageInfo(MediaBrowser.Model.Entities.ImageType.Primary);
+
+                if (image != null)
                 {
-                    var channelsListResponse = _jsonSerializer.DeserializeFromStream<ChannelsListResponse>(channelsListResult.Content);
-                    if (channelsListResponse.ok.Equals("true"))
+                    imageUrl = image.GetRemoteApiImageUrl(new ApiImageOptions
                     {
-                        string channelId = null;
-                        foreach (Channel c in channelsListResponse.channels)
-                        {
-                            if (c.name.Equals(channel))
-                            {
-                                _logger.Debug("found channel id " + c.id + " for channel: " + channel);
-                                channelId = c.id;
-                                break;
-                            }
-
-                        }
-                        if (channelId != null)
-                        {
-                            _logger.Debug("uploading item image to slack");
-                            string imagePath = image.ImageInfo.Path;
-                            var imageInfo = _fileSystem.GetFileInfo(imagePath);
-                            HttpRequestOptions fileUploadOptions = new HttpRequestOptions();
-                            fileUploadOptions.Url = SLACK_UPLOAD_URL;
-                            fileUploadOptions.SetPostData(new Dictionary<String, String>() { { "token", SlackApiToken }, { "filename", imagePath }, { "length", imageInfo.Length.ToString() } });
-
-                            using (var response = await _httpClient.Post(fileUploadOptions).ConfigureAwait(false))
-                            {
-                                _logger.Debug("slack image upload response was: " + response.StatusCode + " " + System.Net.HttpStatusCode.OK);
-                                if (response.StatusCode.Equals(System.Net.HttpStatusCode.OK))
-                                {
-                                    var uploadResult = _jsonSerializer.DeserializeFromStream<FileResponse>(response.Content);
-                                    _logger.Debug("slack image upload result: ");
-                                    _logger.Debug(uploadResult.ToString());
-                                    if (uploadResult.ok.Equals("true"))
-                                    {
-                                        _logger.Debug("uploading notification image to slack");
-
-                                        var filePath = imagePath;
-
-                                        HttpClient multipartHttpClient = new HttpClient();
-                                        using (var multipartFormContent = new MultipartFormDataContent())
-                                        {
-                                            var fileStreamContent = new StreamContent(System.IO.File.OpenRead(filePath));
-                                            //Add the file
-                                            multipartFormContent.Add(fileStreamContent, name: "filename", fileName: filePath);
-                                            //Send it
-                                            var uploadResponse = await multipartHttpClient.PostAsync(uploadResult.upload_url, multipartFormContent).ConfigureAwait(false);
-                                            uploadResponse.EnsureSuccessStatusCode();
-                                            await uploadResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
-                                        }
-
-                                        HttpRequestOptions finalizeUploadOptions = new HttpRequestOptions();
-                                        finalizeUploadOptions.Url = SLACK_UPLOAD_FINALIZE_URL;
-                                        finalizeUploadOptions.RequestHeaders.Add("token", SlackApiToken);
-                                        var finalizePayload = new[] { new { id = uploadResult.file_id } };
-                                        finalizeUploadOptions.SetPostData(new Dictionary<String, String>() { { "token", SlackApiToken }, { "channel_id", channelId }, { "files", System.Net.WebUtility.UrlEncode(_jsonSerializer.SerializeToString(finalizePayload)) } });
-
-                                        using (var finalizeResponse = await _httpClient.Post(finalizeUploadOptions).ConfigureAwait(false))
-                                        {
-                                            var finalUploadResult = _jsonSerializer.DeserializeFromStream<FinalizedFileResponse>(finalizeResponse.Content);
-
-                                            if (finalUploadResult.ok.Equals(true) && finalUploadResult.files.First().permalink_public != null)
-                                            {
-                                                imageUrl = finalUploadResult.files.First().permalink_public;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        else
-                        {
-                            _logger.Debug("Slack image upload aborted due to failure to retrieve channel ID (Didn't find channel name in list)");
-                        }
-                    }
-                    else
-                    {
-                        _logger.Debug("Slack image upload aborted due to failure to retrieve channel ID (Couldn't get channel list): " + channelsListResponse.error);
-                    }
+                        Format = "jpg",
+                        MaxWidth = 1280
+                    });
                 }
-            }
-            else
-            {
-                _logger.Debug("Slack image upload not attempted due to unconfigured Slack API token or missing item image");
             }
 
             var finalMessage = new object { };
-            /*  It doesn't seem to be possible to embed non-public images via webhook. The following commented out code block should otherwise work to
-                combine the item image and the message
-                https://forums.slackcommunity.com/s/question/0D5Hq00009pHglcKAC/how-to-include-private-slack-file-in-incoming-webhook
+            //  It doesn't seem to be possible to embed non-public images via webhook. The following commented out code block should otherwise work to
+            //     combine the item image and the message
+            //    https://forums.slackcommunity.com/s/question/0D5Hq00009pHglcKAC/how-to-include-private-slack-file-in-incoming-webhook
 
-                        if (!string.IsNullOrEmpty(imageUrl)) {
-                            _logger.Debug("sending notification with embedded image to slack");
-                            finalMessage = new {
-                                    channel = slackMessage.channel,
-                                    blocks = new [] {
+            if (!string.IsNullOrEmpty(imageUrl))
+            {
+                _logger.Debug("sending notification with embedded image to slack");
+                finalMessage = new
+                {
+                    channel = slackMessage.channel,
+                    blocks = new[] {
                                         new {
                                             type = "context",
                                             elements = new object[]
@@ -185,7 +108,7 @@ namespace Emby.Notification.Slack
                                                 {
                                                     type = "image",
                                                     image_url = imageUrl,
-                                                    alt_text = "test"
+                                                    alt_text = request.Title.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;")
                                                 },
                                                 new
                                                 {
@@ -196,14 +119,15 @@ namespace Emby.Notification.Slack
                                             }
                                         }
                                     }
-                                };
-                        } else {
-            */
-            _logger.Debug("sending notification with no embedded image to slack");
-            finalMessage = new
+                };
+            }
+            else
             {
-                channel = slackMessage.channel,
-                blocks = new[] {
+                _logger.Debug("sending notification with no embedded image to slack");
+                finalMessage = new
+                {
+                    channel = slackMessage.channel,
+                    blocks = new[] {
                             new {
                                 type = "context",
                                 elements = new object[]
@@ -217,11 +141,8 @@ namespace Emby.Notification.Slack
                                 }
                             }
                         }
-            };
-            //            }
-
-
-            _logger.Debug(_jsonSerializer.SerializeToString(finalMessage));
+                };
+            }
 
             var parameters = new Dictionary<string, string> { };
             parameters.Add("payload", System.Net.WebUtility.UrlEncode(_jsonSerializer.SerializeToString(finalMessage)));

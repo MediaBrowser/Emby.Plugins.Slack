@@ -11,11 +11,12 @@
         Path to Slack Webhook
     </div>
 </div>
-<div class="inputContainer">
-    <input is="emby-input" type="text" class="txtSlackApiToken" required="required" label="(Optional) Slack OAuth API Token:" />
-    <div class="fieldDescription">
-        Slack OAuth API Token (allows the inclusion of media images). To obtain this, you'll need to go into your Slack account, and create a Slack app. Give the app permission for channels:read, files:read, files:write, groups:read, im:read, mpim:read and incoming-webhook. Once the app is created, then you'll be able to generate an OAuth token, which you can enter here.
-    </div>
+<div class="checkboxContainer checkboxContainer-withDescription">
+    <label>
+        <input is="emby-checkbox" type="checkbox" class="chkImages" />
+        <span>Attach images to notifications</span>
+    </label>
+    <div class="fieldDescription checkboxFieldDescription">Slack will access the image from your Emby Server directly. This requires remote access to be setup on this Emby Server, and will also expose your remote server address to Slack.</div>
 </div>
 <div class="inputContainer">
     <input is="emby-input" type="text" class="txtSlackChannel" required="required" label="Message Channel:" />
