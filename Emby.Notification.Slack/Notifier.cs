@@ -80,11 +80,12 @@ namespace Emby.Notification.Slack
 
                 if (image != null)
                 {
-                    imageUrl = image.GetRemoteApiImageUrl(new ApiImageOptions
+                    imageUrl = await image.GetRemoteApiImageUrl(new ApiImageOptions
                     {
                         Format = "jpg",
                         MaxWidth = 1280
-                    });
+
+                    }, cancellationToken).ConfigureAwait(false);
                 }
             }
 
