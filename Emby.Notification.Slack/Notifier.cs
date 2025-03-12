@@ -89,29 +89,29 @@ namespace Emby.Notification.Slack
                 }
             }
 
-            var finalMessage = new object { };
             //  It doesn't seem to be possible to embed non-public images via webhook. The following commented out code block should otherwise work to
             //     combine the item image and the message
             //    https://forums.slackcommunity.com/s/question/0D5Hq00009pHglcKAC/how-to-include-private-slack-file-in-incoming-webhook
 
+            var parameters = new Dictionary<string, string> { };
+
             if (!string.IsNullOrEmpty(imageUrl))
             {
-                _logger.Debug("sending notification with embedded image to slack");
-                finalMessage = new
+                var finalMessage = new SlackBlocksMessage
                 {
                     channel = slackMessage.channel,
                     blocks = new[] {
-                                        new {
+                                        new SlackBlock {
                                             type = "context",
-                                            elements = new object[]
+                                            elements = new []
                                             {
-                                                new
+                                                new SlackElement
                                                 {
                                                     type = "image",
                                                     image_url = imageUrl,
                                                     alt_text = request.Title.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;")
                                                 },
-                                                new
+                                                new SlackElement
                                                 {
                                                     type = "plain_text",
                                                     text = $"{slackMessage.icon_emoji} {slackMessage.text}",
@@ -121,32 +121,12 @@ namespace Emby.Notification.Slack
                                         }
                                     }
                 };
+                parameters.Add("payload", System.Net.WebUtility.UrlEncode(_jsonSerializer.SerializeToString(finalMessage)));
             }
             else
             {
-                _logger.Debug("sending notification with no embedded image to slack");
-                finalMessage = new
-                {
-                    channel = slackMessage.channel,
-                    blocks = new[] {
-                            new {
-                                type = "context",
-                                elements = new object[]
-                                {
-                                    new
-                                    {
-                                        type = "plain_text",
-                                        text = $"{slackMessage.icon_emoji} {slackMessage.text}",
-                                        emoji = true
-                                    }
-                                }
-                            }
-                        }
-                };
+                parameters.Add("payload", System.Net.WebUtility.UrlEncode(_jsonSerializer.SerializeToString(slackMessage)));
             }
-
-            var parameters = new Dictionary<string, string> { };
-            parameters.Add("payload", System.Net.WebUtility.UrlEncode(_jsonSerializer.SerializeToString(finalMessage)));
 
             var _httpRequest = new HttpRequestOptions
             {

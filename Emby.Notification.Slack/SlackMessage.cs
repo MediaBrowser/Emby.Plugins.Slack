@@ -31,4 +31,27 @@ namespace Emby.Notification.Slack
         /// Optional url for icon displayed with the message
         /// </summary>
     }
+
+    public class SlackBlocksMessage
+    {
+        public string channel { get; set; }
+
+        public SlackBlock[] blocks { get; set; } = Array.Empty<SlackBlock>();
+    }
+
+    public class SlackBlock
+    {
+        public string type { get; set; }
+
+        public SlackElement[] elements { get; set; } = Array.Empty<SlackElement>();
+    }
+
+    public class SlackElement
+    {
+        public string type { get; set; }
+        public string text { get; set; }
+        public string alt_text { get; set; }
+        public string image_url { get; set; }
+        public bool emoji { get; set; }
+    }
 }
