@@ -1,20 +1,21 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using Emby.Media.Common.Extensions;
+using Emby.Notifications;
 using MediaBrowser.Common.Net;
+using MediaBrowser.Controller;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Serialization;
-using Emby.Notifications;
-using MediaBrowser.Controller;
-using MediaBrowser.Model.IO;
 using System;
-using System.IO;
-using System.Net.Http;
-using Emby.Media.Common.Extensions;
-using System.Net.Http.Headers;
+using System.Collections.Generic;
 using System.Data.Common;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Web;
 
 namespace Emby.Notification.Slack
 {
@@ -45,6 +46,17 @@ namespace Emby.Notification.Slack
         public string Key => "slacknotifications";
 
         public string SetupModuleUrl => Plugin.NotificationSetupModuleUrl;
+
+        private string EncodePostParam(string value)
+        {
+            if (_appHost.ApplicationVersion >= new Version(4, 11, 0, 10))
+            {
+                // newer versions of the server handle the encoding internally
+                return value;
+            }
+
+            return System.Net.WebUtility.UrlEncode(value);
+        }
 
         public async Task SendNotification(InternalNotificationRequest request, CancellationToken cancellationToken)
         {
@@ -124,11 +136,11 @@ namespace Emby.Notification.Slack
                                         }
                                     }
                 };
-                parameters.Add("payload", System.Net.WebUtility.UrlEncode(_jsonSerializer.SerializeToString(finalMessage)));
+                parameters.Add("payload", EncodePostParam(_jsonSerializer.SerializeToString(finalMessage)));
             }
             else
             {
-                parameters.Add("payload", System.Net.WebUtility.UrlEncode(_jsonSerializer.SerializeToString(slackMessage)));
+                parameters.Add("payload", EncodePostParam(_jsonSerializer.SerializeToString(slackMessage)));
             }
 
             var _httpRequest = new HttpRequestOptions
